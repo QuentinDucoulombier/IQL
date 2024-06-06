@@ -18,6 +18,7 @@ import torch.nn.functional as F
 import wandb
 from torch.distributions import Normal
 from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.utils.tensorboard import SummaryWriter
 
 TensorBatch = List[torch.Tensor]
 
@@ -625,41 +626,37 @@ def train(config: TrainConfig):
         trainer.load_state_dict(torch.load(policy_file))
         actor = trainer.actor
 
-    wandb_init(asdict(config))
+    # Initialize TensorBoard writer
+    writer = SummaryWriter(log_dir=f"runs/{config.env}-{config.seed}")
 
     evaluations = []
     for t in range(int(config.max_timesteps)):
         batch = replay_buffer.sample(config.batch_size)
         batch = [b.to(config.device) for b in batch]
         log_dict = trainer.train(batch)
-        wandb.log(log_dict, step=trainer.total_it)
+
+        # Log metrics to TensorBoard
+        for key, value in log_dict.items():
+            writer.add_scalar(f'train/{key}', value, trainer.total_it)
+
         # Evaluate episode
         if (t + 1) % config.eval_freq == 0:
             print(f"Time steps: {t + 1}")
-            eval_scores = eval_actor(
-                env,
-                actor,
-                device=config.device,
-                n_episodes=config.n_episodes,
-                seed=config.seed,
-            )
+            eval_scores = eval_actor(env, actor, device=config.device, n_episodes=config.n_episodes, seed=config.seed)
             eval_score = eval_scores.mean()
             normalized_eval_score = env.get_normalized_score(eval_score) * 100.0
             evaluations.append(normalized_eval_score)
             print("---------------------------------------")
-            print(
-                f"Evaluation over {config.n_episodes} episodes: "
-                f"{eval_score:.3f} , D4RL score: {normalized_eval_score:.3f}"
-            )
+            print(f"Evaluation over {config.n_episodes} episodes: {eval_score:.3f} , D4RL score: {normalized_eval_score:.3f}")
             print("---------------------------------------")
+
+            # Log evaluation score to TensorBoard
+            writer.add_scalar("eval/d4rl_normalized_score", normalized_eval_score, trainer.total_it)
+
             if config.checkpoints_path is not None:
-                torch.save(
-                    trainer.state_dict(),
-                    os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"),
-                )
-            wandb.log(
-                {"d4rl_normalized_score": normalized_eval_score}, step=trainer.total_it
-            )
+                torch.save(trainer.state_dict(), os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"))
+
+    writer.close()
 
 
 if __name__ == "__main__":
