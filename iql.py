@@ -211,7 +211,7 @@ def wandb_init(config: dict) -> None:
 
 @torch.no_grad()
 def eval_actor(
-    env: gym.Env, actor: nn.Module, device: str, n_episodes: int, seed: int
+    env: gym.Env, actor: nn.Module, device: str, n_episodes: int, seed: int, render: bool = False
 ) -> np.ndarray:
     env.seed(seed)
     actor.eval()
@@ -220,6 +220,9 @@ def eval_actor(
         state, done = env.reset(), False
         episode_reward = 0.0
         while not done:
+            if render:
+                # Render the environment
+                env.render() 
             action = actor.act(state, device)
             state, reward, done, _ = env.step(action)
             episode_reward += reward
@@ -642,7 +645,7 @@ def train(config: TrainConfig):
         # Evaluate episode
         if (t + 1) % config.eval_freq == 0:
             print(f"Time steps: {t + 1}")
-            eval_scores = eval_actor(env, actor, device=config.device, n_episodes=config.n_episodes, seed=config.seed)
+            eval_scores = eval_actor(env, actor, device=config.device, n_episodes=config.n_episodes, seed=config.seed, render=False)
             eval_score = eval_scores.mean()
             normalized_eval_score = env.get_normalized_score(eval_score) * 100.0
             evaluations.append(normalized_eval_score)
