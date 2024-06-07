@@ -658,6 +658,18 @@ def train(config: TrainConfig):
 
             if config.checkpoints_path is not None:
                 torch.save(trainer.state_dict(), os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"))
+    
+    # Calculate and display the average normalized score
+    average_normalized_score = np.mean(evaluations)
+    print(f"Averaged normalized score on {config.env}: {average_normalized_score:.3f}")
+
+    # Write the result to a file
+    with open("result.txt", "w") as f:
+        f.write(f"{config.env}: Averaged normalized score on MuJoCo: {average_normalized_score:.3f}\n")
+
+    # Log the average score to TensorBoard
+    writer.add_scalar("eval/average_normalized_score", average_normalized_score)
+
 
     writer.close()
 
